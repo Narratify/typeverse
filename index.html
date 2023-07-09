@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASCII 3D Renderer</title>
+    <style>
+        body {
+            font-family: "Courier New", monospace;
+            font-size: 10px;
+            white-space: pre;
+        }
+        .hit-wall {
+            animation: flash-red 0.5s;
+        }
+        @keyframes flash-red {
+            0% { color: black; }
+            100% { color: red; }
+        }
+    </style>
+</head>
+<body>
+    <pre id="ascii-art"></pre>
+    <pre id="ascii-map"></pre>
+    <script>
+        const asciiArtElement = document.getElementById('ascii-art');
+        const asciiMapElement = document.getElementById('ascii-map');
+        const screenWidth = 80;
+        const screenHeight = 40;
+        const mapSize = 27;
+        const fov = Math.PI / 3;
+        const mapRenderWidth = 10;
+        const mapRenderHeight = 10;
+        let playerX = 1;
+        let playerY = 1;
+        let playerAngle = Math.PI / 4;
+
+        const mapData =
+            "################           " +
+            "#              #           " +
+            "#              #           " +
+            "#              #           " +
+            "#              #           " +
+            "#              ############" +
+            "#                         #" +
+            "#              ########   #" +
+            "#     ###      #      #   #" +
+            "#     ###      #      #   #" +
+            "#     ###      #      #   #" +
+            "#              #      #   #" +
+            "#              #      #   #" +
+            "#              ########   #" +
+            "#                         #" +
+            "###########################";
+
+        function renderAsciiArt() {
+            let output = '';
+
+            for (let y = 0; y < screenHeight; y++) {
+                for (let x = 0; x < screenWidth; x++) {
+                    const rayAngle = playerAngle - fov / 2 + (x / screenWidth) * fov;
+                    let rayX = playerX;
+                    let rayY = playerY;
+                    let rayLength = 0;
+                    let isWall = false;
+
+                    while (rayLength < mapSize) {
+                        rayLength += 0.1;
+                        rayX = playerX + Math.cos(rayAngle) * rayLength;
+                        rayY = playerY + Math.sin(rayAngle) * rayLength;
+
+                        if (mapData[Math.floor(rayY) * mapSize + Math.floor(rayX)] === "#") {
+                            isWall = true;
+                            break;
+                        }
+                    }
+
+                    const wallHeight = 20 / rayLength;
+                    const angleDifference = Math.abs(rayAngle - playerAngle);
+
+                    if (y < screenHeight / 2 + wallHeight / 2 && isWall) {
+                        output += getShadeCharacter(rayLength, angleDifference, false);
+                    } else if (y >= screenHeight / 2) {
+                        const floorLength = (y - screenHeight / 2) / (screenHeight / 2) * rayLength;
+                        output += getShadeCharacter(floorLength, angleDifference, true);
+                    } else {
+                        output += " ";
+                    }
+                }
+                output += "\n";
+            }
+            asciiArtElement.textContent = output;
+        }
+
+        function renderMap() {
+            let output = '';
+            const startX = Math.max(Math.floor(playerX) - Math.floor(mapRenderWidth / 2), 0);
+            const startY = Math.max(Math.floor(playerY) - Math.floor(mapRenderHeight / 2), 0);
+            const endX = Math.min(startX + mapRenderWidth, mapSize);
+            const endY = Math.min(startY + mapRenderHeight, mapSize);
+
+            for (let y = startY; y < endY; y++) {
+                for (let x = startX; x < endX; x++) {
+                    if (Math.floor(playerX) === x && Math.floor(playerY) === y) {
+                        output += 'P';
+                    } else {
+                        output += mapData[y * mapSize + x];
+                    }
+                }
+                output += "\n";
+            }
+            asciiMapElement.textContent = output;
+        }
+
+        function onKeyDown(event) {
+            const key = event.key;
+            const speed = 0.1;
+            let newPlayerX = playerX;
+            let newPlayerY = playerY;
+            let deltaPlayerX = 0;
+            let deltaPlayerY = 0;
+
+            if (key === "w" || key === "W") {
+                deltaPlayerX = Math.cos(playerAngle) * speed; // Changed
+                deltaPlayerY = Math.sin(playerAngle) * speed; // Changed
+            } else if (key === "s" || key === "S") {
+                deltaPlayerX = -Math.cos(playerAngle) * speed; // Changed
+                deltaPlayerY = -Math.sin(playerAngle) * speed; // Changed
+            } else if (key === "a" || key === "A") {
+                playerAngle -= speed;
+            } else if (key === "d" || key === "D") {
+                playerAngle += speed;
+            }
+
+            newPlayerX += deltaPlayerX;
+            newPlayerY += deltaPlayerY;
+
+            if (mapData[Math.floor(newPlayerY) * mapSize + Math.floor(newPlayerX)] !== "#") {
+                playerX = newPlayerX;
+                playerY = newPlayerY;
+            } else {
+                document.body.classList.add('hit-wall');
+                setTimeout(() => {
+                    document.body.classList.remove('hit-wall');
+                }, 500);
+            }
+        }
+
+        function getShadeCharacter(rayLength, angleDifference, isFloor) {
+            const shades = " .`'^\":,;<>~*i!+|c%I\\][{1)tfjrxnuvczXYUJCLQ0OZmwqpdbkhao_8§$&#@";
+            const numShades = shades.length;
+            const maxRayLength = 30;
+            const normalizedRayLength = Math.min(rayLength / maxRayLength, 1);
+            const index = Math.floor(normalizedRayLength * (numShades - 1));
+
+            let shadeIndex = index;
+
+            if (!isFloor) {
+                const angleWeight = 0.7;
+                const angleFactor = (Math.cos(angleDifference) + 1) / 2;
+                const weightedIndex = Math.floor((1 - angleWeight) * index + angleWeight * angleFactor * (numShades - 1));
+                shadeIndex = weightedIndex;
+            }
+
+            return shades[shadeIndex];
+        }
+
+
+        document.addEventListener('keydown', onKeyDown);
+        setInterval(() => {
+            renderAsciiArt();
+            renderMap();
+        }, 1000 / 30);
+    </script>
+</body>
+</html>
